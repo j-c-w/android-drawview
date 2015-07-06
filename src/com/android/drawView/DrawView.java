@@ -1,36 +1,35 @@
-package com.android.drawView;
-import java.util.ArrayList;
-import java.util.List;
-
+package com.dotpubs.customQuiz.view;
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
+import android.content.res.Resources;
+import android.graphics.*;
+import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
-import android.util.*;
-import android.graphics.Path;
-import android.graphics.Bitmap;
+import android.widget.Toast;
 
-public class DrawView extends View implements OnTouchListener
-{
+import java.util.ArrayList;
+import java.util.List;
+
+public class DrawView extends View implements OnTouchListener {
 	private static final String TAG = "DrawView";
 
+	DrawViewBackground background;
+
+	Bitmap backgroundPicture;
+
 	List<Point> points = new ArrayList<Point>();
-
-	//stores the different colors used so far
 	List<Paint> paint = new ArrayList<Paint>();
-
-	//stores the points along each line that has been drawn
 	List<List<Integer>> newLine = new ArrayList<List<Integer>>();
 
+//	private Bitmap bitmap;
 
 	int which;//to make sure the correct paint is accessed
 
-	public int size =20;//brush size
+	public int size = 8;//brush size
 
-	public DrawView(Context context, AttributeSet attrs){
+	public DrawView(Context context, AttributeSet attrs) {
 		super(context, attrs);
 		init();
 	}
@@ -40,8 +39,7 @@ public class DrawView extends View implements OnTouchListener
 		init();
 	}
 
-	private void init()
-	{
+	private void init() {
 		which = 0;
 		points.add(new Point());
 		paint.add(new Paint());
@@ -63,94 +61,139 @@ public class DrawView extends View implements OnTouchListener
 		//this.setDrawingCacheEnabled(true);
 	}
 
+	public void setBackgroundPicture(Bitmap picture) {
+		this.backgroundPicture = picture;
+	}
 
-	public void setColor(int color){
+
+	public void setColor(int color) {
 		which ++;
 		Paint pain = new Paint();//paint.get(which-1);
 		pain.setColor(color);
 		pain.setStyle(Paint.Style.STROKE);
 		pain.setStrokeWidth(size);
 		pain.setAntiAlias(true);
+
 		paint.add(pain);
 		points.add(new Point());
 		paint.get(which).setColor(color);
 		newLine.add(new ArrayList<Integer>());
-
 	}
 
 	/*
 	 * sets the color of the line
 	 */
-	public void setColor(String hexidecimalColor){
-		which ++;
-		Paint pain = new Paint();//paint.get(which-1);
-		pain.setColor(Color.parseColor((hexidecimalColor)));
-		pain.setStyle(Paint.Style.STROKE);
-		pain.setStrokeWidth(size);
-		pain.setAntiAlias(true);
-		paint.add(pain);
-		points.add(new Point());
-		paint.get(which).setColor(Color.parseColor(hexidecimalColor));
-		newLine.add(new ArrayList<Integer>());
+	public void setColor(String hexidecimalColor) {
+		setColor(Color.parseColor(hexidecimalColor));
 	}
 
 	/* 
 	 * sets the size of the brush
 	 */
-	public void setBrushSize(int size){
+	public void setBrushSize(int size) {
 		which ++;
 		this.size = size;
-		Paint pain = new Paint();//paint.get(which-1);
-		pain.setColor(paint.get(which-1).getColor());
-		pain.setStyle(Paint.Style.STROKE);
-		pain.setStrokeWidth(size);
-		pain.setAntiAlias(true);
-		paint.add(pain);
 		paint.add(paint.get(which-1));
 		points.add(new Point());
-		paint.get(which).setStrokeWidth((float)size);
+		paint.get(which).setStrokeWidth((float) size);
 		newLine.add(new ArrayList<Integer>());
 	}
 
-	public void clear(){//this probably works
+	/*
+	 * This, unlike clear(), which resets absolutely everything,
+	 * keeps the brush as is, and just deletes all the points.
+	 *
+	 * Set keep Background to true to avoid also deleting the
+	 * background.
+	 */
+	public void clearKeepBrush(boolean keepBackground) {
+		Paint oldPaint = paint.get(which);
+
 		which = 0;
 		paint = new ArrayList<Paint>();
 		points = new ArrayList<Point>();
 		newLine = new ArrayList<List<Integer>>();
+
+		if (!keepBackground) {
+			backgroundPicture = null;
+		}
+
+		// This is the line that preserves the old paint style
+		paint.add(oldPaint);
+
+		points.add(new Point());
+		newLine.add(new ArrayList<Integer>());
+
+		invalidate();
+	}
+
+	public void clear() {//this probably works
+		which = 0;
+		paint = new ArrayList<Paint>();
+		points = new ArrayList<Point>();
+		newLine = new ArrayList<List<Integer>>();
+		backgroundPicture = null;
 		init();
-		this.onDraw(new Canvas());
+		invalidate();
 	}
 
 	/* 
 	 * @return
 	 * returns a bitmap object of the canvas
 	 */
-	public Bitmap get(){
-		super.buildDrawingCache();
-		return this.getDrawingCache();
+	public Bitmap get() {
+		if (getWidth() <= 0 || getHeight() <= 0) {
+			Toast.makeText(getContext(), "Null", Toast.LENGTH_SHORT).show();
+			return null;
+		}
+
+		Bitmap b = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
+		Canvas c = new Canvas(b);
+		c.drawColor(Color.WHITE);
+
+		layout(0, 0, getWidth(), getHeight());
+		drawTo(c);
+		return b;
 	}
 
-	public int getColor(){
+	public int getColor() {
 		return paint.get(which).getColor();
 	}
 
+	public int getBrushSize() {
+		return (int) paint.get(which).getStrokeWidth();
+	}
+
 	@Override
-	public void onMeasure(int maxWidth, int maxHeight){
+	public void onMeasure(int maxWidth, int maxHeight) {
 		//	bitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888);
 		super.setMeasuredDimension(maxWidth, maxHeight);
 	}
 
-	@Override
-	public void onDraw(Canvas canvas){
-		int totalSize = 1;
+	/*
+	 * This is used to prevent SO errors when building the drawing of the
+	 * view when there get to be too many points.
+	 *
+	 * This DOES NOT check for too many points. That is only done in onDraw
+	 * (which is only called by the system).
+	 */
+	public void drawTo(Canvas canvas) {
 		//canvas = new Canvas(bitmap);
 		//canvas.drawBitmap(bitmap, new Matrix(), paint.get(which));
-		for (int i = 0; i<points.size(); i++){
+		if (background != null) {
+			background.drawOn(canvas);
+		}
+
+		if (backgroundPicture != null) {
+			canvas.drawBitmap(backgroundPicture, 0, 0, new Paint());
+		}
+
+		Path path = new Path();
+		for (int i = 0; i < points.size(); i++) {
 			Point point = points.get(i);
-			totalSize *= point.length();
-			Path path = new Path();
-			for (int in = 0; in<point.length(); in++){
-				if (newLine.get(i).contains(in)||in==0){//checks for a new line
+			path.reset();
+			for (int in = 0; in < point.length(); in++) {
+				if (newLine.get(i).contains(in) || in == 0) {//checks for a new line
 					path.moveTo(point.x.get(in), point.y.get(in));//moves to new point
 				} else {
 					path.lineTo(point.x.get(in), point.y.get(in));//draw path!!
@@ -158,12 +201,33 @@ public class DrawView extends View implements OnTouchListener
 				//	Log.i("AndroidRuntime", Integer.toString(in) + Integer.toString(which));
 			}
 			//	Log.i("AndroidRuntime", Integer.toString(i) + "-"+Integer.toString(which));
-			try{
+			try {
 				canvas.drawPath(path, paint.get(i));
-			} catch(Exception e){
+			} catch(Exception e) {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	@Override
+	public void onDraw(Canvas canvas) {
+		drawTo(canvas);
+
+		int totalSize = 0;
+
+		for (Point p : points) {
+			totalSize += p.length();
+		}
+
+		if (totalSize > 400) {
+			setBackgroundPicture(get());
+			clearKeepBrush(true);
+		}
+	}
+
+
+	public void setDrawViewBackground(DrawViewBackground background) {
+		this.background = background;
 	}
 
 	public boolean onTouch(View view, MotionEvent event) {
@@ -175,24 +239,62 @@ public class DrawView extends View implements OnTouchListener
 		invalidate();//can't remember what this does either
 		//I wrote the basics for this a while ago
 		//	Log.d(TAG, "point: " + point);
-		if(event.getAction() == MotionEvent.ACTION_UP){
+		if(event.getAction() == MotionEvent.ACTION_UP) {
 			// if the user lifts thier finger up
 			newLine.get(which).add(points.get(which).length());//this line sucks
 		}
 		return true;
 	}
-	public void touch(View view, MotionEvent event){
+
+	public void touch(View view, MotionEvent event) {
 		//nada
+	}
+
+	public static final DrawViewBackground PLAIN = new DrawViewBackground() {
+		@Override
+		public void drawOn(Canvas canvas) {
+			return;
+		}
+	};
+
+	public static final DrawViewBackground LINED = new DrawViewBackground() {
+		final float SPACING_PX = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 35, Resources.getSystem().getDisplayMetrics());
+		final Paint LINE_PAINT = new Paint();
+
+		@Override
+		public void drawOn(Canvas canvas) {
+			int WIDTH = canvas.getWidth();
+			LINE_PAINT.setColor(Color.GRAY);
+
+			int numberOfLines = (int) (canvas.getHeight() / SPACING_PX);
+
+			for (int i = 0; i < numberOfLines; i ++) {
+				float top =  i * SPACING_PX;
+				canvas.drawRect(0, top, WIDTH, top + 2, LINE_PAINT);
+			}
+
+		}
+	};
+
+
+	/*
+	 * This is an interface that can be used to
+	 * define any kind of background you want.
+	 *
+	 * It should be set with setDrawViewBackground.
+	 */
+	public interface DrawViewBackground {
+		public void drawOn(Canvas canvas);
 	}
 }
 
 class Point {
 	List<Float> x, y;
-	public Point(){
+	public Point() {
 		x = new ArrayList<Float>();
 		y = new ArrayList<Float>();
 	}
-	public int length(){
+	public int length() {
 		return x.size();
 	}
 
