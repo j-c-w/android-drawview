@@ -219,7 +219,7 @@ public class DrawView extends View implements OnTouchListener {
 			totalSize += p.length();
 		}
 
-		if (totalSize > 400) {
+		if (totalSize > 400 && drawingNewLine) {
 			setBackgroundPicture(get());
 			clearKeepBrush(true);
 		}
